@@ -7,6 +7,8 @@ See the document "LICENSE" included in the project folder for licencing details.
 //#define VISUALIZE
 
 using UnityEngine;
+using UnityEngine.Animations;
+using UnityEngine.Playables;
 using System.Diagnostics;
 using System.Collections;
 using System.Collections.Generic;
