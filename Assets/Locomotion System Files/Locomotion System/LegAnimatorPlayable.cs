@@ -169,7 +169,10 @@ public class LegAnimatorPlayable : MonoBehaviour {
 	// playable field	
 	private Animator TargetAnimator;
 	private PlayableGraph AnimationGraph;
-	private AnimationMixerPlayable ClipMixer;
+
+	private AnimationMixerPlayable MotionMixer;
+	private AnimationMixerPlayable[] GroupMixer;
+	// private AnimationMixerPlayable ClipMixer;
 
 
 	[System.NonSerialized]
@@ -259,11 +262,52 @@ public class LegAnimatorPlayable : MonoBehaviour {
 		AnimationGraph = PlayableGraph.Create("AnimGraph");
 		var playableOutput = AnimationPlayableOutput.Create(AnimationGraph, "Animation", TargetAnimator);
 
-        ClipMixer = AnimationMixerPlayable.Create(graph, 2);
+        // MotionMixer = AnimationMixerPlayable.Create(AnimationGraph, legC.motions.Length);
 		// ControllerPlayable = AnimatorControllerPlayable.Create(AnimationGraph, Controller);
-		playableOutput.SetSourcePlayable(ClipMixer);
 
+		// GroupMotionMixer = new 
+		motionPlayables = new AnimationClipPlayable[legC.motions.Length];
+		cycleMotionPlayables = new AnimationClipPlayable[legC.cycleMotions.Length];
+		int pcm = 0;
+		var motionDict = new Dictionary<string, AnimationClipPlayable>();
+		for (int m = 0; m < legC.motions.Length; m++) {
+			var motion = legC.motions[m];
+			motion.animation.legacy = false;
+			var newClipPlayable = AnimationClipPlayable.Create(AnimationGraph, motion.animation);
+			motionDict[motion.name] = newClipPlayable;
+			motionPlayables[m] = newClipPlayable;
+			if (motion.motionType==MotionType.WalkCycle) {
+				cycleMotionPlayables[pcm] = motionPlayables[m];
+				// cycleMotionStates[pcm].speed = 0;
+				pcm++;
+			}
+			
+			// AnimationGraph.Connect(motionPlayables[m], 0, MotionMixer, m);
+		}
+        MotionMixer = AnimationMixerPlayable.Create(AnimationGraph, legC.motionGroups.Length);
+		GroupMixer = new AnimationMixerPlayable[legC.motionGroups.Length];
+		for (int g = 0; g < legC.motionGroups.Length; g++) {
+			var motionGroup = legC.motionGroups[g];
+			var newGroupMixer = AnimationMixerPlayable.Create(AnimationGraph, motionGroup.motions.Length);
+			for (int m = 0; m < motionGroup.motions.Length; ++m) {
+				var motion = motionGroup.motions[m];
+				var clipPlayable = motionDict[motion.name];
+				AnimationGraph.Connect(clipPlayable, 0, newGroupMixer, m);
+			}
+			GroupMixer[g] = newGroupMixer;
+			AnimationGraph.Connect(newGroupMixer, 0, MotionMixer, g);
+		}
+        // GroupMixer = AnimationMixerPlayable.Create(AnimationGraph, 1);
 
+		// AnimationGraph.Connect(MotionMixer, 0, GroupMixer, 0);
+
+		// GroupMixer.SetInputWeight(0, 1);
+
+		// playableOutput.SetSourcePlayable(GroupMixer);
+		playableOutput.SetSourcePlayable(MotionMixer);
+		AnimationGraph.Play();
+
+		/////// /////// ///////
 		motionStates = new AnimationState[legC.motions.Length];
 		cycleMotionStates = new AnimationState[legC.cycleMotions.Length];
 		motionWeights = new float[legC.motions.Length];
