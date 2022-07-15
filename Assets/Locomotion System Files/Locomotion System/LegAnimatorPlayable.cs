@@ -78,6 +78,54 @@ using System.Collections.Generic;
 // 	public float[] relativeWeightsBlended;
 // 	public int primaryMotionIndex;
 // }
+// public class AnimationClipPlayableState {
+
+// 	// 摘要:
+// 	//     Enables / disables the animation.
+// 	public bool enabled { get; set; }
+// 	//
+// 	// 摘要:
+// 	//     The weight of animation.
+// 	public float weight { get; set; }
+// 	//
+// 	// 摘要:
+// 	//     Wrapping mode of the animation.
+// 	public WrapMode wrapMode { get; set; }
+// 	//
+// 	// 摘要:
+// 	//     The current time of the animation.
+// 	public float time { get; set; }
+// 	//
+// 	// 摘要:
+// 	//     The normalized time of the animation.
+// 	public float normalizedTime { get; set; }
+// 	//
+// 	// 摘要:
+// 	//     The playback speed of the animation. 1 is normal playback speed.
+// 	public float speed { get; set; }
+// 	//
+// 	// 摘要:
+// 	//     The normalized playback speed.
+// 	public float normalizedSpeed { get; set; }
+// 	//
+// 	// 摘要:
+// 	//     The length of the animation clip in seconds.
+// 	public float length { get; }
+// 	public int layer { get; set; }
+// 	//
+// 	// 摘要:
+// 	//     The clip that is being played by this animation state.
+// 	public AnimationClip clip { get; }
+// 	//
+// 	// 摘要:
+// 	//     The name of the animation.
+// 	public string name { get; set; }
+// 	//
+// 	// 摘要:
+// 	//     Which blend mode should be used?
+// 	public AnimationBlendMode blendMode { get; set; }
+
+// }
 
 [RequireComponent(typeof(LegController))]
 [RequireComponent(typeof(AlignmentTracker))]
@@ -273,9 +321,11 @@ public class LegAnimatorPlayable : MonoBehaviour {
 		for (int m = 0; m < legC.motions.Length; m++) {
 			var motion = legC.motions[m];
 			motion.animation.legacy = false;
+			motion.animation.wrapMode = WrapMode.Loop;
 			var newClipPlayable = AnimationClipPlayable.Create(AnimationGraph, motion.animation);
 			motionDict[motion.name] = newClipPlayable;
 			motionPlayables[m] = newClipPlayable;
+			PlayableExtensions.SetSpeed(newClipPlayable, 0);
 			if (motion.motionType==MotionType.WalkCycle) {
 				cycleMotionPlayables[pcm] = motionPlayables[m];
 				// cycleMotionStates[pcm].speed = 0;
@@ -292,7 +342,7 @@ public class LegAnimatorPlayable : MonoBehaviour {
 			for (int m = 0; m < motionGroup.motions.Length; ++m) {
 				var motion = motionGroup.motions[m];
 				var clipPlayable = motionDict[motion.name];
-				AnimationGraph.Connect(clipPlayable, 0, newGroupMixer, m);
+				// AnimationGraph.Connect(clipPlayable, 0, newGroupMixer, m);
 			}
 			GroupMixer[g] = newGroupMixer;
 			AnimationGraph.Connect(newGroupMixer, 0, MotionMixer, g);
@@ -465,15 +515,21 @@ public class LegAnimatorPlayable : MonoBehaviour {
 			// Check if motion group weight have changed significantly
 			bool changedGroupWeight = false;
 			bool justEnabled = false;
-			float newGroupWeight = group.controller.weight;
+			// float newGroupWeight = group.controller.weight;
+			float newGroupWeight = MotionMixer.GetInputWeight(g);
+			
 			AssertSane(newGroupWeight,"newGroupWeight");
-			if (group.controller.enabled==false || newGroupWeight < smallWeightDifference) newGroupWeight = 0;
+			// if (group.controller.enabled==false || newGroupWeight < smallWeightDifference) newGroupWeight = 0;
+			if (newGroupWeight < smallWeightDifference) newGroupWeight = 0;
 			else if (newGroupWeight > 1-smallWeightDifference) newGroupWeight = 1;
+
 			if (Mathf.Abs(newGroupWeight-group.weight) > smallWeightDifference) {
 				changedGroupWeight = true;
 				newWeights = true;
 				if (group.weight==0 && newGroupWeight>0) justEnabled = true;
 				group.weight = newGroupWeight;
+
+				MotionMixer.SetInputWeight(g, newGroupWeight);
 			}
 			
 			// Check if primary weight in motion group have changed significantly
@@ -484,9 +540,9 @@ public class LegAnimatorPlayable : MonoBehaviour {
 					group.motionStates[group.primaryMotionIndex].weight
 					- group.relativeWeights[group.primaryMotionIndex] * group.weight
 				) > smallWeightDifference
-				||
-				group.motionStates[group.primaryMotionIndex].layer
-				!= group.controller.layer
+				// ||
+				// group.motionStates[group.primaryMotionIndex].layer
+				// != group.controller.layer
 			) {
 				changedGroupWeight = true;
 			}
@@ -514,6 +570,8 @@ public class LegAnimatorPlayable : MonoBehaviour {
 				
 				float highestWeight = 0;
 				int controllerLayer = group.controller.layer;
+				int[] enabledSlots = new int[group.motionStates.Length];
+				int slot = 0;
 				for (int m=0; m<group.motionStates.Length; m++) {
 					if (blendSmoothing > 0)
 						group.relativeWeightsBlended[m] = Mathf.Lerp(group.relativeWeightsBlended[m], group.relativeWeights[m], Time.deltaTime / blendSmoothing);
@@ -523,16 +581,36 @@ public class LegAnimatorPlayable : MonoBehaviour {
 					AssertSane(group.relativeWeightsBlended[m],"group.relativeWeightsBlended[m]");
 					AssertSane(Time.deltaTime / blendSmoothing,"Time.deltaTime / blendSmoothing ( "+Time.deltaTime+" / "+blendSmoothing+" )");
 					float weight = group.relativeWeightsBlended[m] * group.weight;
+
 					group.motionStates[m].weight = weight;
-					if (weight>0) group.motionStates[m].enabled = true;
-					else group.motionStates[m].enabled = false;
+					if (weight>0)
+					{
+						// group.motionStates[m].enabled = true;
+						enabledSlots[m] = slot;
+						slot++;
+					} 
+					else 
+					{
+						// group.motionStates[m].enabled = false;
+						enabledSlots[m] = -1;
+					}
 					group.motionStates[m].layer = controllerLayer;
+
 					// Remember which motion has the highest weight
 					// This will be used for checking that the weights
 					// are not changed by external factors.
 					if (weight>highestWeight) {
 						group.primaryMotionIndex = m;
 						highestWeight = weight;
+					}
+				}
+				var groupPlayable = GroupMixer[g];
+				PlayableExtensions.SetInputCount(groupPlayable, slot);
+				for (int m=0; m<group.motionStates.Length; m++) 
+				{
+					int mslot = enabledSlots[m];
+					if ( mslot >= 0) {
+						AnimationGraph.Connect(motionPlayables[m], 0, groupPlayable, mslot);
 					}
 				}
 			}

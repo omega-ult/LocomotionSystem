@@ -453,6 +453,9 @@ public class LegAnimator : MonoBehaviour {
 				
 				float highestWeight = 0;
 				int controllerLayer = group.controller.layer;
+
+				// AnimationGraph.Connect(clipPlayable, 0, newGroupMixer, m);
+
 				for (int m=0; m<group.motionStates.Length; m++) {
 					if (blendSmoothing > 0)
 						group.relativeWeightsBlended[m] = Mathf.Lerp(group.relativeWeightsBlended[m], group.relativeWeights[m], Time.deltaTime / blendSmoothing);
