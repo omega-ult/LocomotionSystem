@@ -126,6 +126,11 @@ using System.Collections.Generic;
 // 	public AnimationBlendMode blendMode { get; set; }
 
 // }
+public class MotionGroupPlayableState :  MotionGroupState
+{
+	public AnimationMixerPlayable groupMixer;
+	public AnimationClipPlayable[] motionPlayableStates;
+}
 
 [RequireComponent(typeof(LegController))]
 [RequireComponent(typeof(AlignmentTracker))]
@@ -193,10 +198,10 @@ public class LegAnimatorPlayable : MonoBehaviour {
 	private float accelerationTiltX;
 	private float accelerationTiltZ;
 	
-	private AnimationState controlMotionState;
-	private MotionGroupState[] motionGroupStates;
-	private AnimationState[] nonGroupMotionStates;
-	private AnimationClipPlayable[] nonGroupMotionPlayables;
+	// private AnimationState controlMotionState;
+	private MotionGroupPlayableState[] motionGroupStates;
+	// private AnimationState[] nonGroupMotionStates;
+	// private AnimationClipPlayable[] nonGroupMotionPlayables;
 	private float[] nonGroupMotionWeights;
 	private AnimationState[] motionStates;
 	private AnimationClipPlayable[] motionPlayables;
@@ -335,23 +340,7 @@ public class LegAnimatorPlayable : MonoBehaviour {
 			// AnimationGraph.Connect(motionPlayables[m], 0, MotionMixer, m);
 		}
         MotionMixer = AnimationMixerPlayable.Create(AnimationGraph, legC.motionGroups.Length);
-		GroupMixer = new AnimationMixerPlayable[legC.motionGroups.Length];
-		for (int g = 0; g < legC.motionGroups.Length; g++) {
-			var motionGroup = legC.motionGroups[g];
-			var newGroupMixer = AnimationMixerPlayable.Create(AnimationGraph, motionGroup.motions.Length);
-			for (int m = 0; m < motionGroup.motions.Length; ++m) {
-				var motion = motionGroup.motions[m];
-				var clipPlayable = motionDict[motion.name];
-				// AnimationGraph.Connect(clipPlayable, 0, newGroupMixer, m);
-			}
-			GroupMixer[g] = newGroupMixer;
-			AnimationGraph.Connect(newGroupMixer, 0, MotionMixer, g);
-		}
-        // GroupMixer = AnimationMixerPlayable.Create(AnimationGraph, 1);
 
-		// AnimationGraph.Connect(MotionMixer, 0, GroupMixer, 0);
-
-		// GroupMixer.SetInputWeight(0, 1);
 
 		// playableOutput.SetSourcePlayable(GroupMixer);
 		playableOutput.SetSourcePlayable(MotionMixer);
@@ -364,73 +353,95 @@ public class LegAnimatorPlayable : MonoBehaviour {
 		cycleMotionWeights = new float[legC.cycleMotions.Length];
 		nonGroupMotionWeights = new float[legC.nonGroupMotions.Length];
 		
-		// Create control motion state
-		controlMotionState = GetComponent<Animation>()["LocomotionSystem"];
-		if (controlMotionState==null) {
-			// Create dummy animation state with control motion name
-			AnimationClip clip = new AnimationClip();
-			clip.legacy = true;
-			GetComponent<Animation>().AddClip(clip, "LocomotionSystem");
-			controlMotionState = GetComponent<Animation>()["LocomotionSystem"];
-		}
-		controlMotionState.enabled = true;
-		controlMotionState.wrapMode = WrapMode.Loop;
-		controlMotionState.weight = 1;
-		controlMotionState.layer = 10000;
+		#region
+			// // Create control motion state
+			// controlMotionState = GetComponent<Animation>()["LocomotionSystem"];
+			// if (controlMotionState==null) {
+			// 	// Create dummy animation state with control motion name
+			// 	AnimationClip clip = new AnimationClip();
+			// 	clip.legacy = true;
+			// 	GetComponent<Animation>().AddClip(clip, "LocomotionSystem");
+			// 	controlMotionState = GetComponent<Animation>()["LocomotionSystem"];
+			// }
+			// controlMotionState.enabled = true;
+			// controlMotionState.wrapMode = WrapMode.Loop;
+			// controlMotionState.weight = 1;
+			// controlMotionState.layer = 10000;
+		#endregion
+
+		#region
+			// Create motion states
+			// int cm = 0;
+			// for (int m=0; m<legC.motions.Length; m++) {
+			// 	motionStates[m] = GetComponent<Animation>()[legC.motions[m].name];
+			// 	if (motionStates[m]==null) {
+			// 		GetComponent<Animation>().AddClip(legC.motions[m].animation, legC.motions[m].name);
+			// 		motionStates[m] = GetComponent<Animation>()[legC.motions[m].name];
+			// 	}
+			// 	motionStates[m].wrapMode = WrapMode.Loop;
+			// 	if (legC.motions[m].motionType==MotionType.WalkCycle) {
+			// 		cycleMotionStates[cm] = motionStates[m];
+			// 		cycleMotionStates[cm].speed = 0;
+			// 		cm++;
+			// 	}
+			// }
+		#endregion
 		
-		// Create motion states
-		motionGroupStates = new MotionGroupState[legC.motionGroups.Length];
-		int cm = 0;
-		for (int m=0; m<legC.motions.Length; m++) {
-			motionStates[m] = GetComponent<Animation>()[legC.motions[m].name];
-			if (motionStates[m]==null) {
-				GetComponent<Animation>().AddClip(legC.motions[m].animation, legC.motions[m].name);
-				motionStates[m] = GetComponent<Animation>()[legC.motions[m].name];
+		#region
+			motionGroupStates = new MotionGroupPlayableState[legC.motionGroups.Length];
+			// Create motion group states
+			for (int g=0; g<motionGroupStates.Length; g++) {
+				var motionGroup = legC.motionGroups[g];
+				AnimationState controller = GetComponent<Animation>()[motionGroup.name];
+				if (controller==null) {
+					// Create dummy animation state with motion group name
+					AnimationClip clip = new AnimationClip();
+					clip.legacy = true;
+					GetComponent<Animation>().AddClip(clip, motionGroup.name);
+					controller = GetComponent<Animation>()[motionGroup.name];
+				}
+				controller.enabled = true;
+				controller.wrapMode = WrapMode.Loop;
+				if (startAutomatically && g==0) controller.weight = 1;
+
+				
+				
+				// Create state for this motion group
+				var motionGroupState = new MotionGroupPlayableState();
+				motionGroupStates[g] = motionGroupState;
+				motionGroupState.controller = controller;
+				motionGroupState.motionStates = new AnimationState[motionGroup.motions.Length];
+				motionGroupState.relativeWeights = new float[motionGroup.motions.Length];
+				// for (int m=0; m<motionGroupState.motionStates.Length; m++) {
+				// 	motionGroupState.motionStates[m] =
+				// 		GetComponent<Animation>()[motionGroup.motions[m].name];
+				// }
+				motionGroupState.primaryMotionIndex = 0;
+
+				// for playable
+				motionGroupState.groupMixer = AnimationMixerPlayable.Create(AnimationGraph, motionGroup.motions.Length);
+				motionGroupState.motionPlayableStates = new AnimationClipPlayable[motionGroup.motions.Length];
+				for (int m=0; m<motionGroupState.motionStates.Length; m++) {
+					var motion = motionGroup.motions[m];
+					var clipPlayable = AnimationClipPlayable.Create(AnimationGraph, motion.animation);
+					clipPlayable.SetDuration(motion.animation.length);
+					motionGroupState.motionPlayableStates[m] = clipPlayable;
+					AnimationGraph.Connect(clipPlayable, 0, motionGroupState.groupMixer, m);
+				}
+				AnimationGraph.Connect(motionGroupState.groupMixer, 0, MotionMixer, g);
 			}
-			motionStates[m].wrapMode = WrapMode.Loop;
-			if (legC.motions[m].motionType==MotionType.WalkCycle) {
-				cycleMotionStates[cm] = motionStates[m];
-				cycleMotionStates[cm].speed = 0;
-				cm++;
-			}
-		}
-		
-		// Create motion group states
-		for (int g=0; g<motionGroupStates.Length; g++) {
-			AnimationState controller = GetComponent<Animation>()[legC.motionGroups[g].name];
-			if (controller==null) {
-				// Create dummy animation state with motion group name
-				AnimationClip clip = new AnimationClip();
-				clip.legacy = true;
-				GetComponent<Animation>().AddClip(clip, legC.motionGroups[g].name);
-				controller = GetComponent<Animation>()[legC.motionGroups[g].name];
-			}
-			controller.enabled = true;
-			controller.wrapMode = WrapMode.Loop;
-			if (startAutomatically && g==0) controller.weight = 1;
 			
-			// Create state for this motion group
-			motionGroupStates[g] = new MotionGroupState();
-			motionGroupStates[g].controller = controller;
-			motionGroupStates[g].motionStates = new AnimationState[legC.motionGroups[g].motions.Length];
-			motionGroupStates[g].relativeWeights = new float[legC.motionGroups[g].motions.Length];
-			for (int m=0; m<motionGroupStates[g].motionStates.Length; m++) {
-				motionGroupStates[g].motionStates[m] =
-					GetComponent<Animation>()[legC.motionGroups[g].motions[m].name];
-			}
-			motionGroupStates[g].primaryMotionIndex = 0;
-		}
-		
-		// Create list of motions states that are not in motions groups
-		nonGroupMotionStates = new AnimationState[legC.nonGroupMotions.Length];
-		for (int m=0; m<legC.nonGroupMotions.Length; m++) {
-			nonGroupMotionStates[m] = GetComponent<Animation>()[legC.nonGroupMotions[m].name];
-			if (nonGroupMotionStates[m]==null) {
-				GetComponent<Animation>().AddClip(legC.nonGroupMotions[m].animation, legC.nonGroupMotions[m].name);
-				nonGroupMotionStates[m] = GetComponent<Animation>()[legC.nonGroupMotions[m].name];
-				nonGroupMotionWeights[m] = nonGroupMotionStates[m].weight;
-			}
-		}
+			// Create list of motions states that are not in motions groups
+			// nonGroupMotionStates = new AnimationState[legC.nonGroupMotions.Length];
+			// for (int m=0; m<legC.nonGroupMotions.Length; m++) {
+			// 	nonGroupMotionStates[m] = GetComponent<Animation>()[legC.nonGroupMotions[m].name];
+			// 	if (nonGroupMotionStates[m]==null) {
+			// 		GetComponent<Animation>().AddClip(legC.nonGroupMotions[m].animation, legC.nonGroupMotions[m].name);
+			// 		nonGroupMotionStates[m] = GetComponent<Animation>()[legC.nonGroupMotions[m].name];
+			// 		nonGroupMotionWeights[m] = nonGroupMotionStates[m].weight;
+			// 	}
+			// }
+		#endregion
 		
 		for (int leg=0; leg<legs.Length; leg++) {
 			legStates[leg] = new LegState();
@@ -510,13 +521,16 @@ public class LegAnimatorPlayable : MonoBehaviour {
 		
 		// Handle weights in motions groups
 		for (int g=0; g<legC.motionGroups.Length; g++) {
-			MotionGroupState group = motionGroupStates[g];
+			MotionGroupPlayableState group = motionGroupStates[g];
 			
 			// Check if motion group weight have changed significantly
 			bool changedGroupWeight = false;
 			bool justEnabled = false;
 			// float newGroupWeight = group.controller.weight;
 			float newGroupWeight = MotionMixer.GetInputWeight(g);
+
+			// DEBUG
+			newGroupWeight = 1;
 			
 			AssertSane(newGroupWeight,"newGroupWeight");
 			// if (group.controller.enabled==false || newGroupWeight < smallWeightDifference) newGroupWeight = 0;
@@ -535,16 +549,18 @@ public class LegAnimatorPlayable : MonoBehaviour {
 			// Check if primary weight in motion group have changed significantly
 			// by external factors, for example a CrossFade that fades down these weights.
 			// We must then enforce that the weights are again set according to the group dictate
-			else if (
-				Mathf.Abs(
-					group.motionStates[group.primaryMotionIndex].weight
-					- group.relativeWeights[group.primaryMotionIndex] * group.weight
-				) > smallWeightDifference
-				// ||
-				// group.motionStates[group.primaryMotionIndex].layer
-				// != group.controller.layer
-			) {
-				changedGroupWeight = true;
+			else 
+			{
+				float primeWeight = group.groupMixer.GetInputWeight(group.primaryMotionIndex);
+				float variant = primeWeight - group.relativeWeights[group.primaryMotionIndex] * group.weight;
+				if (
+					Mathf.Abs( variant) > smallWeightDifference
+					// ||
+					// group.motionStates[group.primaryMotionIndex].layer
+					// != group.controller.layer
+				) {
+					changedGroupWeight = true;
+				}
 			}
 			
 			if ( newVelocity || changedGroupWeight ) {	
@@ -569,7 +585,7 @@ public class LegAnimatorPlayable : MonoBehaviour {
 				}
 				
 				float highestWeight = 0;
-				int controllerLayer = group.controller.layer;
+				// int controllerLayer = group.controller.layer;
 				int[] enabledSlots = new int[group.motionStates.Length];
 				int slot = 0;
 				for (int m=0; m<group.motionStates.Length; m++) {
@@ -582,7 +598,8 @@ public class LegAnimatorPlayable : MonoBehaviour {
 					AssertSane(Time.deltaTime / blendSmoothing,"Time.deltaTime / blendSmoothing ( "+Time.deltaTime+" / "+blendSmoothing+" )");
 					float weight = group.relativeWeightsBlended[m] * group.weight;
 
-					group.motionStates[m].weight = weight;
+					// group.groupMixer.SetInputWeight(m, weight);
+					// group.motionStates[m].weight = weight;
 					if (weight>0)
 					{
 						// group.motionStates[m].enabled = true;
@@ -594,7 +611,7 @@ public class LegAnimatorPlayable : MonoBehaviour {
 						// group.motionStates[m].enabled = false;
 						enabledSlots[m] = -1;
 					}
-					group.motionStates[m].layer = controllerLayer;
+					// group.motionStates[m].layer = controllerLayer;
 
 					// Remember which motion has the highest weight
 					// This will be used for checking that the weights
@@ -604,13 +621,21 @@ public class LegAnimatorPlayable : MonoBehaviour {
 						highestWeight = weight;
 					}
 				}
-				var groupPlayable = GroupMixer[g];
-				PlayableExtensions.SetInputCount(groupPlayable, slot);
+
+				// TODO
+				// var groupPlayable = GroupMixer[g];
+				int inputs = PlayableExtensions.GetInputCount(group.groupMixer);
+				for(int i = inputs - 1; i >= 0; --i) {
+					AnimationGraph.Disconnect(group.groupMixer, i);
+				}
+				PlayableExtensions.SetInputCount(group.groupMixer, slot);
 				for (int m=0; m<group.motionStates.Length; m++) 
 				{
 					int mslot = enabledSlots[m];
 					if ( mslot >= 0) {
-						AnimationGraph.Connect(motionPlayables[m], 0, groupPlayable, mslot);
+						float weight = group.relativeWeightsBlended[m] * group.weight;
+						AnimationGraph.Connect(motionPlayables[m], 0, group.groupMixer, mslot);
+						group.groupMixer.SetInputWeight(mslot, weight);
 					}
 				}
 			}
@@ -624,17 +649,17 @@ public class LegAnimatorPlayable : MonoBehaviour {
 		}
 		
 		// Handle weights of motions that are not in motions groups
-		for (int m=0; m<nonGroupMotionStates.Length; m++) {
-			float newWeight = nonGroupMotionStates[m].weight;
-			if (nonGroupMotionStates[m].enabled==false) newWeight = 0;
-			if (
-				Mathf.Abs(newWeight-nonGroupMotionWeights[m]) > smallWeightDifference
-				|| (newWeight==0 && nonGroupMotionWeights[m]!=0)
-			) {
-				newWeights = true;
-				nonGroupMotionWeights[m] = newWeight;
-			}
-		}
+		// for (int m=0; m<nonGroupMotionStates.Length; m++) {
+		// 	float newWeight = nonGroupMotionStates[m].weight;
+		// 	if (nonGroupMotionStates[m].enabled==false) newWeight = 0;
+		// 	if (
+		// 		Mathf.Abs(newWeight-nonGroupMotionWeights[m]) > smallWeightDifference
+		// 		|| (newWeight==0 && nonGroupMotionWeights[m]!=0)
+		// 	) {
+		// 		newWeights = true;
+		// 		nonGroupMotionWeights[m] = newWeight;
+		// 	}
+		// }
 		
 		bool justActivated = updateStates;
 		if (newWeights || updateStates) {
@@ -774,9 +799,10 @@ public class LegAnimatorPlayable : MonoBehaviour {
 			}
 		}
 		
-		float controlMotionStateWeight = controlMotionState.weight;
-		if (!controlMotionState.enabled) controlMotionStateWeight = 0;
-		locomotionWeight = Mathf.Clamp01(summedMotionWeight * controlMotionStateWeight);
+		// float controlMotionStateWeight = controlMotionState.weight;
+		// if (!controlMotionState.enabled) controlMotionStateWeight = 0;
+		// locomotionWeight = Mathf.Clamp01(summedMotionWeight * controlMotionStateWeight);
+		locomotionWeight = 1;
 		if (updateStates || justActivated) ResetSteps();
 		
 		// Calculate cycle distance and duration

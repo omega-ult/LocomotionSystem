@@ -44974,6 +44974,10 @@ PrefabInstance:
       propertyPath: m_Name
       value: HumanWithAnimator
       objectReference: {fileID: 0}
+    - target: {fileID: 100142, guid: c9b8ccb6a16944813a83887699f8abc9, type: 3}
+      propertyPath: m_IsActive
+      value: 1
+      objectReference: {fileID: 0}
     - target: {fileID: 400142, guid: c9b8ccb6a16944813a83887699f8abc9, type: 3}
       propertyPath: m_RootOrder
       value: 6
